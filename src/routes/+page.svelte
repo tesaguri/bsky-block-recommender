@@ -60,7 +60,7 @@
 
 <form onsubmit={loadBlocks}>
 	{#snippet actorInput()}
-		<label>Load blocks from account: <input bind:value={actor} /></label>
+		<label>Load blocks from account: <input placeholder="handle.example or did:web:example.com" bind:value={actor} /></label>
 	{/snippet}
 	{#await loadBlocksPromise}
 		<div>
@@ -87,7 +87,7 @@
 </form>
 <h2 id="blocking-heading">Accounts you are blocking</h2>
 <form onsubmit={makeRecommendation}>
-	<textarea class="blocking" aria-labelledby="blocking-heading" bind:value={blockingInput}></textarea>
+	<textarea class="blocking" aria-labelledby="blocking-heading" placeholder="did:web:example.com" bind:value={blockingInput}></textarea>
 	<button type="submit" disabled={recommendationTask?.active}>Show me who to block!</button>
 	<button onclick={cancelMakeRecommendation} disabled={!recommendationTask?.active}>Cancel</button>
 </form>
