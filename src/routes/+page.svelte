@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { isAtprotoDid } from '@atproto/did';
 	import { isValidHandle } from '@atproto/syntax';
-	import type { SvelteSet } from 'svelte/reactivity';
+	import { SvelteSet } from 'svelte/reactivity';
 
 	import RecommendationList from '$lib/components/RecommendationList.svelte';
 	import * as bsky from '$lib/bsky.js';
@@ -41,7 +41,7 @@
 		if (recommendationTask) {
 			recommendationTask.abort.abort();
 		}
-		const blocking = new Set(blockingInput.split('\n'));
+		const blocking = new SvelteSet(blockingInput.split('\n'));
 		blocking.delete('');
 		recommendationTask = {
 			blocking,
