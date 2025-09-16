@@ -36,7 +36,7 @@
 	} = $props();
 
 	interface Blocker extends CacheEntry {
-		blocking: string[];
+		blocking: Set<string>;
 	}
 
 	const BLOCKER_CACHE_AGE = 15 * 60 * 1000;
@@ -62,7 +62,7 @@
 						commonBlockerCountMemo.set(blockerDid, (commonBlockerCountMemo.get(blockerDid) ?? 0) + 1);
 						let blocker = blockerCache.get(blockerDid);
 						if (!blocker) {
-							const blockerBlocking: string[] = [];
+							const blockerBlocking: Set<string> = new Set();
 							blocker = {
 								blocking: blockerBlocking,
 								expires: Infinity,
@@ -72,11 +72,13 @@
 								for await (const theirBlocks of bsky.getActorsBlockedBy(blockerDid, localSignal)) {
 									localSignal.throwIfAborted();
 									for (const theirBlock of theirBlocks) {
-										if (!blocking.has(theirBlock)) {
-											toBlock.set(theirBlock, (toBlock.get(theirBlock) ?? 0) + commonBlockerCountMemo.get(blockerDid)!);
+										if (!blockerBlocking.has(theirBlock)) {
+											if (!blocking.has(theirBlock)) {
+												toBlock.set(theirBlock, (toBlock.get(theirBlock) ?? 0) + commonBlockerCountMemo.get(blockerDid)!);
+											}
+											blockerBlocking.add(theirBlock);
 										}
 									}
-									blockerBlocking.push(...theirBlocks);
 								}
 							} catch (e) {
 								console.error(e);
