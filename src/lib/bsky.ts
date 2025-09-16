@@ -1,10 +1,15 @@
 import { AtpBaseClient } from '@atproto/api';
-import { DidResolver, getPds, HandleResolver } from '@atproto/identity';
+import { MINUTE } from '@atproto/common-web';
+import { DidResolver, getPds, HandleResolver, MemoryCache } from '@atproto/identity';
+import pLimit from 'p-limit';
+
 import * as constellation from '$lib/constellation.js';
 
+const requestLimit = new Map<string, ReturnType<typeof pLimit>>();
+
 const handleResolver = new HandleResolver();
-const didResolver = new DidResolver({});
-export async function* getBlocksOfActor(id: string, signal: AbortSignal): AsyncGenerator<string[]> {
+const didResolver = new DidResolver({ didCache: new MemoryCache(15 * MINUTE, 60 * MINUTE) });
+export async function* getActorsBlockedBy(id: string, signal: AbortSignal): AsyncGenerator<string[]> {
 	signal.throwIfAborted();
 
 	let did;
@@ -33,14 +38,20 @@ export async function* getBlocksOfActor(id: string, signal: AbortSignal): AsyncG
 		service: pds,
 	});
 
-	let cursor;
+	let limit = requestLimit.get(pds);
+	if (!limit) {
+		limit = pLimit(5);
+		requestLimit.set(pds, limit);
+	}
+
+	let cursor: string | undefined;
 	do {
-		const res = await client.com.atproto.repo.listRecords({
+		const res = await limit(() => client.com.atproto.repo.listRecords({
 			repo: did,
 			collection: 'app.bsky.graph.block',
 			cursor,
 			limit: 100,
-		});
+		}));
 		signal.throwIfAborted();
 
 		yield res.data.records.reduce((acc: string[], record) => {
@@ -51,5 +62,19 @@ export async function* getBlocksOfActor(id: string, signal: AbortSignal): AsyncG
 		}, []);
 
 		cursor = res.data.cursor;
+	} while (cursor);
+}
+
+export async function* getActorsBlocking(subject: string, signal: AbortSignal): AsyncGenerator<string[]> {
+	let cursor;
+	do {
+		const res = await constellation.distinctDids({
+			target: subject,
+			collection: 'app.bsky.graph.block',
+			path: '.subject',
+			cursor,
+		}, signal);
+		yield res.linking_dids;
+		cursor = res.cursor;
 	} while (cursor);
 }

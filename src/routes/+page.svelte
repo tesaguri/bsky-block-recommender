@@ -1,14 +1,14 @@
 <script lang="ts">
 	import { isAtprotoDid } from '@atproto/did';
 	import { isValidHandle } from '@atproto/syntax';
+	import type { SvelteSet } from 'svelte/reactivity';
 
-	import BskyActorList from '$lib/components/BskyActorList.svelte';
+	import RecommendationList from '$lib/components/RecommendationList.svelte';
 	import * as bsky from '$lib/bsky.js';
 
 	let actor = $state('');
 	let actorIsValid = $derived(isValidHandle(actor) || isAtprotoDid(actor));
 	let blockingInput = $state('');
-	let toBlock: string[] | undefined = $state();
 
 	let loadBlocksPromise = $state();
 	let loadBlocksAbort: AbortController | undefined;
@@ -16,7 +16,7 @@
 		const abort = new AbortController();
 		const signal = abort.signal;
 		loadBlocksPromise = (async () => {
-			for await (const subjects of bsky.getBlocksOfActor(actor, signal)) {
+			for await (const subjects of bsky.getActorsBlockedBy(actor, signal)) {
 				blockingInput += subjects.join('\n');
 				blockingInput += '\n';
 			}
@@ -30,21 +30,31 @@
 		loadBlocksPromise = undefined;
 	}
 
-	let makeRecommendationPromise = $state();
+	interface RecommendationTask {
+		blocking: SvelteSet<string>;
+		abort: AbortController;
+		active: boolean;
+	}
+
+	let recommendationTask: RecommendationTask | undefined = $state();
 	function makeRecommendation() {
+		if (recommendationTask) {
+			recommendationTask.abort.abort();
+		}
 		const blocking = new Set(blockingInput.split('\n'));
 		blocking.delete('');
-		toBlock = [];
-		makeRecommendationPromise = (async () => {
-			// TODO
-			toBlock.push('did:plc:ewvi7nxzyoun6zhxrhs64oiz');
-			await new Promise<void>(resolve => setTimeout(resolve, 500));
-			toBlock.push('did:plc:z72i7hdynmk6r22z27h6tvur');
-		})();
+		recommendationTask = {
+			blocking,
+			abort: new AbortController(),
+			active: true,
+		};
 	}
 
 	function cancelMakeRecommendation() {
-		makeRecommendationPromise = undefined;
+		if (recommendationTask) {
+			recommendationTask.abort.abort();
+			recommendationTask.active = false;
+		}
 	}
 </script>
 
@@ -78,21 +88,12 @@
 <h2 id="blocking-heading">Accounts you are blocking</h2>
 <form onsubmit={makeRecommendation}>
 	<textarea class="blocking" aria-labelledby="blocking-heading" bind:value={blockingInput}></textarea>
-	{#await makeRecommendationPromise}
-		<button type="submit" disabled>Show me who to block!</button>
-		<button onclick={cancelMakeRecommendation}>Cancel</button>
-	{:then}
-		<button type="submit">Show me who to block!</button>
-		<button disabled>Cancel</button>
-	{/await}
+	<button type="submit" disabled={recommendationTask?.active}>Show me who to block!</button>
+	<button onclick={cancelMakeRecommendation} disabled={!recommendationTask?.active}>Cancel</button>
 </form>
-{#if toBlock}
+{#if recommendationTask}
 	<h2>Result</h2>
-	{#if toBlock.length}
-		<BskyActorList dids={toBlock}/>
-	{:else}
-		<p>No users to block!</p>
-	{/if}
+	<RecommendationList blocking={recommendationTask.blocking} signal={recommendationTask.abort.signal} bind:active={recommendationTask.active} />
 {/if}
 
 <style>
